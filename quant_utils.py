@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import scale, MinMaxScaler
 from pyforecaster.papa.client import get_model_forecaster_by_name, login
-from qrutils.future_utils import get_X_and_snapshot_baptized
-from qrutils.future_utils import get_product_information,get_rolling_product
+from qrutils.future_utils import get_X_and_snapshot_baptized, get_all_predictors
+from qrutils.future_utils import get_product_information,get_rolling_product,get_X_and_snapshot
 pd.set_option('display.max_columns', None)
 import datetime
 
@@ -48,6 +48,9 @@ def get_oc_threshold(prod = 'i1',date = None):
 
 
 
+def get_X(prod = 'i1',start_date = 20210901,end_date = 20210902,):
+    login('yu.wang','123')
+    return get_X_and_snapshot(prod,start_date,end_date,extra_predictors=get_all_predictors(prod),must_calculate = True,disable_old_batch = True)
 
 
 
@@ -55,8 +58,7 @@ def get_oc_threshold(prod = 'i1',date = None):
 
 
 
-
-def get_sig_result(df_all,horizon = 10,rolling = 1):
+def get_sig_info(df_all,horizon = 2,rolling = 1):
     
     fig,axs = plt.subplots(2,2,dpi = 100,figsize = (12,10))
     
@@ -69,23 +71,25 @@ def get_sig_result(df_all,horizon = 10,rolling = 1):
     print('STATS OF LOG-RETURN\n',y.describe())
     
     rolling_ic = calc_rolling_corr(df_all.machine_timestamp,y,x,rolling)
-
-    rolling_ic.plot(ax = axs[0,0],title = 'rolling IC',rot = 90 )
+    plt.xticks(rotation = 90)
+    rolling_ic.plot(ax = axs[0,0],title = 'rolling IC')
     
-    x.hist(ax = axs[0,1],color = 'b',alpha = 0.5,bins = 50,label = 'sig')
-    y.hist(ax = axs[1,0],color = 'r',alpha = 0.5,bins = 50,label  = 'log_return')
+    x.plot(kind = 'hist',ax = axs[0,1],color = 'b',alpha = 0.5,bins = 50,label = 'sig')
+    y.plot(kind = 'hist',ax = axs[1,0],color = 'r',alpha = 0.5,bins = 50,label  = 'log_return')
     
-#   xz = MinMaxScaler().fit_transform(x.values.reshape(-1,1))
-#   yz = MinMaxScaler().fit_transform(y.values.reshape(-1,1))
+#     xz = MinMaxScaler().fit_transform(x.values.reshape(-1,1))
+#     yz = MinMaxScaler().fit_transform(y.values.reshape(-1,1))
     xz = scale(x)
     yz = scale(y)
-    pd.Series(xz.reshape(1,-1)[0]).hist(ax = axs[1,1],color = 'b',alpha = 0.5,bins = 30,label = 'sig')
-    pd.Series(yz.reshape(1,-1)[0]).hist(ax = axs[1,1],color = 'r',alpha = 0.5,bins = 30,label = 'log_return')
-                
+    # pd.Series(xz.reshape(1,-1)[0]).plot(kind = 'hist',ax = axs[1,1],color = 'b',alpha = 0.5,bins = 30,label = 'sig',xlim = [-0.01,0.01])
+    # pd.Series(yz.reshape(1,-1)[0]).plot(kind = 'hist',ax = axs[1,1],color = 'r',alpha = 0.5,bins = 30,label = 'log_return',xlim = [-0.01,0.01])
+    x.plot(kind = 'hist',ax = axs[1,1],color = 'b',alpha = 0.5,bins = 100,label = 'sig',xlim = [-0.002,0.002])
+    y.plot(kind = 'hist',ax = axs[1,1],color = 'r',alpha = 0.5,bins = 100,label = 'log_return',xlim = [-0.002,0.002],rot = 45)         
     plt.legend()
     plt.show()
     
     return x,y,rolling_ic
+    
     
 def plot_y_for_x(x,y,direction = 'y-x'):
     if direction == 'y-x':
