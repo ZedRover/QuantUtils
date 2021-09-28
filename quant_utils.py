@@ -47,15 +47,21 @@ def get_oc_threshold(prod = 'i1',date = None):
         print('volume threshold to be defined')
 
 
-
-def get_X(prod = 'i1',start_date = 20210901,end_date = 20210902,):
+def get_X(prod = 'i1',start_date = 20210901,end_date = 20210902):
     login('yu.wang','123')
     return get_X_and_snapshot(prod,start_date,end_date,extra_predictors=get_all_predictors(prod),must_calculate = True,disable_old_batch = True)
 
 
 
+def get_ic_value(signal,price,time,horizon = 2):
+    logr = -log_return(time,price, -horizon*10**9)
 
 
+    return corr(logr,signal)
+def get_rolling_ic_value(signal,price,time,horizon = 2):
+    logr = -log_return(time,price, -horizon*10**9)
+    return calc_rolling_corr(logr,signal)
+    
 
 
 def get_sig_info(df_all,horizon = 2,rolling = 1):
