@@ -58,9 +58,11 @@ def get_ic_value(signal,price,time,horizon = 2):
 
 
     return corr(logr,signal)
+
 def get_rolling_ic_value(signal,price,time,horizon = 2):
     logr = -log_return(time,price, -horizon*10**9)
-    return calc_rolling_corr(logr,signal)
+    return calc_rolling_corr(time,logr,signal,rolling_window =2 )
+
     
 
 
@@ -97,7 +99,7 @@ def get_sig_info(df_all,horizon = 2,rolling = 1):
     return x,y,rolling_ic
     
     
-def plot_y_for_x(x,y,direction = 'y-x'):
+def plot_y_for_x(x,y,thres,direction = 'x-y'):
     if direction == 'y-x':
         x_up_99 = x.quantile(0.99)
         x_down_01 = x.quantile(0.01)
@@ -127,22 +129,24 @@ def plot_y_for_x(x,y,direction = 'y-x'):
 
         up_idx = np.where(y > y_up_99)[0]
         down_idx = np.where(y < y_down_01)[0]
+        
+        
+        
+        
+        m_up_idx = list(set(np.where(y > thres)[0]))
+        m_down_idx = list(set(np.where(y < -thres)[0]))
 
-        m_up_idx = list(set(np.where(y > y.quantile(0.5))[0]) & set(
-            np.where(y < y.quantile(0.8))[0]))
-
-        m_down_idx = list(set(np.where(y < y.quantile(0.5))[0]) & set(
-            np.where(y > y.quantile(0.2))[0]))
 
         fig, axs = plt.subplots(2, 2, dpi=100, figsize=(20, 10))
         x[list(set(up_idx))].plot(ax=axs[0, 0],
                                 kind='hist', title='y>0.99', bins=30, grid=1,)
         x[list(set(down_idx))].plot(ax=axs[0, 1],
                                     kind='hist', title='y<0.01', bins=30, grid=1)
+        
         x[list(set(m_up_idx))].plot(ax=axs[1, 0], kind='hist',
-                                    title='0.50<y<0.8', bins=40, grid=1)
+                                    title='y> taking_thres', bins=40, grid=1)
         x[list(set(m_down_idx))].plot(ax=axs[1, 1], kind='hist',
-                                    title='0.2<y<0.50', bins=40, grid=1)
+                                    title='y< taking_thres', bins=40, grid=1)
         plt.show()
 
 
