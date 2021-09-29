@@ -1,6 +1,7 @@
 from qrutils import log_return, corr, calc_rolling_corr
 import pandas as pd
 import numpy as np
+from scipy import stats 
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import scale, MinMaxScaler
 from pyforecaster.papa.client import get_model_forecaster_by_name, login
@@ -42,7 +43,9 @@ def get_oc_threshold(prod = 'i1',date = None):
     info = get_future_info(prod,date)
     if info['close_ratio_by_volume']==0:
         return (info['open_ratio_by_money']+info['close_ratio_by_money'])*(1-info['rebate'])/2
+        # taking thres * tick size
 
+                            
     else:
         print('volume threshold to be defined')
 
@@ -64,8 +67,6 @@ def get_rolling_ic_value(signal,price,time,horizon = 2):
     return calc_rolling_corr(time,logr,signal,rolling_window =2 )
 
     
-
-
 def get_sig_info(df_all,horizon = 2,rolling = 1):
     
     fig,axs = plt.subplots(2,2,dpi = 100,figsize = (12,10))
@@ -98,7 +99,6 @@ def get_sig_info(df_all,horizon = 2,rolling = 1):
     
     return x,y,rolling_ic
     
-    
 def plot_y_for_x(x,y,thres,direction = 'x-y'):
     if direction == 'y-x':
         x_up_99 = x.quantile(0.99)
@@ -120,33 +120,29 @@ def plot_y_for_x(x,y,thres,direction = 'x-y'):
         y[list(set(m_up_idx))].plot(ax = axs[1,0],kind = 'hist',title = '0.50<x<0.51',bins = 40,grid = 1)
         y[list(set(m_down_idx))].plot(ax = axs[1,1],kind = 'hist',title = '0.49<x<0.50',bins = 40,grid = 1)
         plt.show()
+        
     else:
         y_up_99 = y.quantile(0.99)
         y_down_01 = y.quantile(0.01)
 
-        print(y_up_99)
-        print(y_down_01)
 
         up_idx = np.where(y > y_up_99)[0]
         down_idx = np.where(y < y_down_01)[0]
-        
-        
-        
-        
-        m_up_idx = list(set(np.where(y > thres)[0]))
-        m_down_idx = list(set(np.where(y < -thres)[0]))
-
-
+                
+        m_up_idx = np.where(y > thres)[0]
+        m_down_idx = np.where(y < -thres)[0]
+        print((x[list(set(up_idx))]))
         fig, axs = plt.subplots(2, 2, dpi=100, figsize=(20, 10))
+
         x[list(set(up_idx))].plot(ax=axs[0, 0],
-                                kind='hist', title='y>0.99', bins=30, grid=1,)
+                                kind='hist', title='y>0.99,skew: {:.4f}'.format(stats.skew(x[list(set(up_idx))])), bins=30, grid=1,)
         x[list(set(down_idx))].plot(ax=axs[0, 1],
-                                    kind='hist', title='y<0.01', bins=30, grid=1)
-        
+                                    kind='hist', title='y<0.01,skew: {:.4f}'.format(stats.skew(x[list(set(down_idx))])), bins=30, grid=1)
         x[list(set(m_up_idx))].plot(ax=axs[1, 0], kind='hist',
-                                    title='y> taking_thres', bins=40, grid=1)
+                                    title='y > taking_thhres ; skew: {:.4f}'.format(stats.skew(x[list(set(m_up_idx))])), bins=40, grid=1)
         x[list(set(m_down_idx))].plot(ax=axs[1, 1], kind='hist',
-                                    title='y< taking_thres', bins=40, grid=1)
+                                    title='y < taking_thhres ; skew: {:.4f}'.format(stats.skew(x[list(set(m_down_idx))])), bins=40, grid=1)
+
         plt.show()
 
 
