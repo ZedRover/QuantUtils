@@ -10,6 +10,11 @@ from qrutils.future_utils import get_product_information,get_rolling_product,get
 pd.set_option('display.max_columns', None)
 import datetime
 from sfutils import signal_utils as sgu 
+from sklearn import linear_model
+from tqdm import trange
+from sklearn.metrics import confusion_matrix,f1_score
+import functools 
+import seaborn as sns 
 
 def get_model_forecaster(prod='i0001',
                          bgn_date=20210901,
@@ -42,10 +47,8 @@ def get_future_info(prod = 'i1', date = None):
 def get_oc_threshold(prod = 'i1',date = None):
     info = get_future_info(prod,date)
     if info['close_ratio_by_volume']==0:
-        return (info['open_ratio_by_money']+info['close_ratio_by_money'])*(1-info['rebate'])/2
-        # taking thres * tick size
-
-                            
+        return np.log(1/(1-(info['open_ratio_by_money']+info['close_ratio_by_money'])*(1-info['rebate'])/2))
+        # taking thres * tick size  
     else:
         print('volume threshold to be defined')
 
@@ -101,8 +104,8 @@ def get_sig_info(df_all,horizon = 2,rolling = 1):
     
 def plot_y_for_x(x,y,thres,direction = 'x-y'):
     if direction == 'y-x':
-        x_up_99 = x.quantile(0.99)
-        x_down_01 = x.quantile(0.01)
+        x_up_99 = x.quantile(0.85)
+        x_down_01 = x.quantile(0.15)
 
         print(x_up_99)
         print(x_down_01)
@@ -122,8 +125,8 @@ def plot_y_for_x(x,y,thres,direction = 'x-y'):
         plt.show()
         
     else:
-        y_up_99 = y.quantile(0.99)
-        y_down_01 = y.quantile(0.01)
+        y_up_99 = y.quantile(0.85)
+        y_down_01 = y.quantile(0.15)
 
 
         up_idx = np.where(y > y_up_99)[0]
@@ -187,3 +190,76 @@ def calc_rolling_skew(time,log_r,signals,rolling_window):
     return rolling_skew 
 
 
+def signal_confusion_matrix(time,x,y,thres,horizon = 1):
+    """
+    Parameters
+    ----------
+        time
+        x: signal
+        y: log return 
+        thres: [making_thres,taking_thres]
+    """
+    t = [-np.inf, -thres[1],thres[0],0,thres[0],thres[1],np.inf]
+    data = pd.concat([pd.Series(x),pd.Series(y)],axis=1).dropna(how = 'any',axis=0)
+    reg = linear_model.LinearRegression()
+    reg.fit(data.iloc[:,0].values.reshape(-1,1),data.iloc[:,1].values.reshape(-1,1))
+    # assert np.abs(reg.intercept_) < 1e-4,'wrong model'
+    a = reg.coef_[0]
+    a =1 
+    y = pd.Series(y, index=pd.to_datetime(time))
+    x = pd.DataFrame(x, index=pd.to_datetime(time))
+    rolling_window=1
+    trading_days = pd.unique(pd.to_datetime(time.values).date)
+    results = []
+    scores  = []
+    for i in trange(len(trading_days)):    
+        yi = y.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])].reset_index(drop=1).values.flatten()
+        xi = x.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])].reset_index(drop=1).values.flatten()
+        # days
+        assert len(xi)==len(yi)
+        resulti,scorei = cts_confusion_matrix(xi,yi,a,thres,_clf_func)         
+        results.append(resulti)
+        scores.append(scorei)
+    return results ,scores 
+
+
+def cts_confusion_matrix(x,y,a,thres,_clf_func):
+    if len(x.shape)==2:
+        columns = list(range(x.shape[1]))
+    else:
+        columns = [0]
+    if hasattr(y, 'values'):
+        y = y.values.flatten()
+    if hasattr(x, 'columns'):
+        columns = x.columns
+    if hasattr(x, 'values'):
+        x = x.values.flatten()
+    # xc = list(map(_clf_func,x*a,thres))
+    # yc = list(map(_clf_func,y,thres))
+    _clf_func_thres = functools.partial(_clf_func,thres = thres)
+    a = float(a)
+    xc = np.frompyfunc(_clf_func_thres,1,1)(x*a)
+    yc = np.frompyfunc(_clf_func_thres,1,1)(y)
+    xc = pd.Series(xc,dtype = 'int64')
+    yc = pd.Series(yc,dtype = 'int64')
+    # xc = pd.DataFrame(xc)
+    # yc = pd.DataFrame(yc)
+    result = confusion_matrix(yc,xc)
+    score = f1_score(yc,xc,average = 'micro')
+    return result,score 
+
+
+def _clf_func(x,thres):
+    thres *=100
+    assert len(thres)>1,'wrong thres'
+    if x<-thres[1]:
+        return 0 
+    elif x<-thres[0] and x > -thres[1]:
+        return 1
+    elif x<thres[0] and x > -thres[0]:
+        return 2
+    elif x<thres[1] and x > thres[0]:
+        return 3
+    elif x> thres[1]:
+        return 4 
+    
