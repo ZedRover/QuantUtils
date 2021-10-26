@@ -22,7 +22,8 @@ def zero_divide(x,y):
     elif y==0:
         res = 0 
     return res 
-    
+
+
 
 
 

@@ -1,3 +1,4 @@
+from pandas.core.window import rolling
 from qrutils import log_return, corr, calc_rolling_corr
 import pandas as pd
 import numpy as np
@@ -17,6 +18,7 @@ import functools
 import seaborn as sns 
 from scipy import stats 
 import sys 
+from sklearn.metrics import r2_score
 
 
 def get_model_forecaster(prod='i0001',
@@ -126,8 +128,8 @@ def plot_y_for_x(x,y,thres,direction = 'x-y'):
     """
     if direction == 'y-x':
         
-        upperb = 0.90
-        lowerb = 0.10
+        upperb = 0.80
+        lowerb = 0.20
         
         x_upper = x.quantile(upperb)
         x_lower = x.quantile(lowerb)
@@ -220,13 +222,21 @@ def calc_rolling_score(time,log_r,signals,rolling_window,nda = None):
         
     rolling_score = pd.DataFrame(result_dic).T
     if nda==None:
-        rolling_score.columns = ['mean +','mean -','skew +','skew -','ic +','ic -']
+        rolling_score.columns = ['mean +','mean -','skew +','skew -','ic +','ic -','r2 +','r2 -']
+        rolling_score['skew']=rolling_score['skew +']-rolling_score['skew -']
+        rolling_score['ic'] = (rolling_score['ic +']+rolling_score['ic -'])/2
+        rolling_score['r2'] = (rolling_score['r2 +']+rolling_score['r2 -'])/2
     else:
         col = []
         for x in nda:
-            col.extend([x+'_mean +',x+'_mean -',x+'_skew +',x+'_skew -',x+'_ic +',x+'_ic -'])
+            col.extend([x+'_mean +',x+'_mean -',x+'_skew +',x+'_skew -',x+'_ic +',x+'_ic -',
+                        x+'_r2 +',x+'_r2 -'])
         rolling_score.columns = col
-
+        for x in nda:
+            rolling_score['skew']=rolling_score[x+'_skew +']-rolling_score[x+'_skew -']
+            rolling_score['ic'] = (rolling_score[x+'_ic +']+rolling_score[x+ '_ic -'])/2
+            rolling_score['r2'] = (rolling_score[x+'_r2 +']+rolling_score[x+ '_r2 -'])/2
+        
     return rolling_score ,rolling_score.apply(_calc_result_score,axis=1)
 
 def _calc_result_score(df):
@@ -239,6 +249,8 @@ def _calc_result_score(df):
             else:
                 res+=df[col]
         else:
+            if 'ic' in col:
+                res+=df[col]
             if "mean" in col:
                 res-=df[col]*1e3
             else:
@@ -251,7 +263,6 @@ def _calc_score(i, trading_days, rolling_window, log_r, signal,nda = None):
     logr_i = log_r.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])]
     signals_i = signal.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])]
     thres = get_oc_threshold('i1')
-    
     if nda == None:
         signals_i = signals_i.reset_index(drop=True).values.flatten()
         logr_i    = logr_i.reset_index(drop=True).values.flatten()
@@ -262,6 +273,8 @@ def _calc_score(i, trading_days, rolling_window, log_r, signal,nda = None):
         
         result.extend([np.mean(m_logr_u),np.mean(m_logr_d),stats.skew(m_logr_u),stats.skew(m_logr_d)])
         result.extend(ic)
+        result.extend([r2_score(m_logr_u,signals_i[np.where(signals_i>thres)[0]]),r2_score(m_logr_d,signals_i[np.where(signals_i<-thres)[0]])])
+        
     else:
         # plt.plot(logr_i.index)
         # sys.exit()
@@ -294,12 +307,13 @@ def _calc_score(i, trading_days, rolling_window, log_r, signal,nda = None):
                 ic = [corr(x1,y1),corr(x2,y2)]
             result.extend([np.mean(m_logr_u),np.mean(m_logr_d),stats.skew(m_logr_u),stats.skew(m_logr_d)])
             result.extend(ic)
+            result.extend([r2_score(y1,x1),r2_score(y2,x2)])
             
     return str(trading_days[i + rolling_window-1]), result 
 
 
 
-
+   
 
 
 def signal_confusion_matrix(time,x,y,thres,horizon = 1):
