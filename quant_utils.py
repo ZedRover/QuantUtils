@@ -15,6 +15,9 @@ from tqdm import trange
 from sklearn.metrics import confusion_matrix,f1_score
 import functools 
 import seaborn as sns 
+from scipy import stats 
+import sys 
+
 
 def get_model_forecaster(prod='i0001',
                          bgn_date=20210901,
@@ -103,48 +106,68 @@ def get_sig_info(df_all,horizon = 2,rolling = 1):
     return x,y,rolling_ic
     
 def plot_y_for_x(x,y,thres,direction = 'x-y'):
+    """
+    Parameters
+    ----------
+    x : pd.Series
+        The signal 
+    y : pd.Series 
+        Log return
+    thres: float 
+        The taking threshold
+    direction: str,optional,"x-y" or "y-x" 
+        Plot x according to y or reverse 
+        
+    Returns
+    -------
+    None
+    
+        
+    """
     if direction == 'y-x':
-        x_up_99 = x.quantile(0.85)
-        x_down_01 = x.quantile(0.15)
+        
+        upperb = 0.90
+        lowerb = 0.10
+        
+        x_upper = x.quantile(upperb)
+        x_lower = x.quantile(lowerb)
+        
 
-        print(x_up_99)
-        print(x_down_01)
+        up_idx = np.where(x>x_upper)[0]
+        down_idx  = np.where(x<x_lower)[0]
 
-        up_idx = np.where(x>x_up_99)[0]
-        down_idx  = np.where(x<x_down_01)[0]
-
-        m_up_idx = list(set(np.where(x> x.quantile(0.5))[0]) & set(np.where(x<x.quantile(0.51))[0]))
-
-        m_down_idx = list(set(np.where(x< x.quantile(0.5))[0]) & set(np.where(x> x.quantile(0.49))[0]))
-
+        over_thres_id = np.where(x > thres)[0]
+        down_thres_id = np.where(x < -thres)[0]
         fig,axs = plt.subplots(2,2,dpi = 100,figsize = (20,10))
-        y[list(set(up_idx))].plot(ax = axs[0,0],kind = 'hist',title = 'x>0.99',bins = 30,grid = 1)
-        y[list(set(down_idx))].plot(ax = axs[0,1],kind = 'hist',title = 'x<0.01',bins = 30,grid = 1)
-        y[list(set(m_up_idx))].plot(ax = axs[1,0],kind = 'hist',title = '0.50<x<0.51',bins = 40,grid = 1)
-        y[list(set(m_down_idx))].plot(ax = axs[1,1],kind = 'hist',title = '0.49<x<0.50',bins = 40,grid = 1)
+        plt.suptitle('log return hist according to signal')
+        y[list(set(up_idx))].plot(ax = axs[0,0],kind = 'hist',title = 'x> {} (pct)'.format(upperb),bins = 30,grid = 1)
+        y[list(set(down_idx))].plot(ax = axs[0,1],kind = 'hist',title = 'x< {} (pct)'.format(lowerb),bins = 30,grid = 1)
+        y[list(set(over_thres_id))].plot(ax = axs[1,0],kind = 'hist',title = 'x > thres',bins = 40,grid = 1)
+        y[list(set(down_thres_id))].plot(ax = axs[1,1],kind = 'hist',title = 'x < -thres',bins = 40,grid = 1)
         plt.show()
         
     else:
-        y_up_99 = y.quantile(0.85)
-        y_down_01 = y.quantile(0.15)
-
+        upperb = 0.90
+        lowerb = 0.10
+        y_up_99 = y.quantile(upperb)
+        y_down_01 = y.quantile(lowerb)
 
         up_idx = np.where(y > y_up_99)[0]
         down_idx = np.where(y < y_down_01)[0]
-                
+    
         m_up_idx = np.where(y > thres)[0]
         m_down_idx = np.where(y < -thres)[0]
         print((x[list(set(up_idx))]))
         fig, axs = plt.subplots(2, 2, dpi=100, figsize=(20, 10))
-
+        plt.suptitle('signal hist according to log return')
         x[list(set(up_idx))].plot(ax=axs[0, 0],
-                                kind='hist', title='y>0.99,skew: {:.4f}'.format(stats.skew(x[list(set(up_idx))])), bins=30, grid=1,)
+                                kind='hist', title='y>{} pct,skew: {:.4f}'.format(upperb,stats.skew(x[list(set(up_idx))])), bins=30, grid=1,)
         x[list(set(down_idx))].plot(ax=axs[0, 1],
-                                    kind='hist', title='y<0.01,skew: {:.4f}'.format(stats.skew(x[list(set(down_idx))])), bins=30, grid=1)
+                                    kind='hist', title='y<{} pct,skew: {:.4f}'.format(lowerb,stats.skew(x[list(set(down_idx))])), bins=30, grid=1)
         x[list(set(m_up_idx))].plot(ax=axs[1, 0], kind='hist',
-                                    title='y > taking_thhres ; skew: {:.4f}'.format(stats.skew(x[list(set(m_up_idx))])), bins=40, grid=1)
+                                    title='y > taking_thres ; skew: {:.4f}'.format(stats.skew(x[list(set(m_up_idx))])), bins=40, grid=1)
         x[list(set(m_down_idx))].plot(ax=axs[1, 1], kind='hist',
-                                    title='y < taking_thhres ; skew: {:.4f}'.format(stats.skew(x[list(set(m_down_idx))])), bins=40, grid=1)
+                                    title='y < -taking_thres ; skew: {:.4f}'.format(stats.skew(x[list(set(m_down_idx))])), bins=40, grid=1)
 
         plt.show()
 
@@ -152,21 +175,29 @@ def plot_y_for_x(x,y,thres,direction = 'x-y'):
 
 
 
-def _calc_skew(i, trading_days, rolling_window, log_r, signal):
-    logr_i = log_r.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])].reset_index(drop=1).values.flatten()
-    signals_i = signal.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])].reset_index(drop=1).values.flatten()
-    thres = get_oc_threshold('i1')
-    # corr_num = signals_i.corrwith(logr_i)
-    skew_num = []
-    skew_num.append(stats.skew(sgu.xy_finder(signals_i,logr_i,thres,reverse = True)))
-    skew_num.append(stats.skew(sgu.xy_finder(signals_i,logr_i,-thres,reverse = True)))
+
+def calc_rolling_score(time,log_r,signals,rolling_window,nda = None):
+    """
+    Parameters
+    ----------
+    time: pd.DatetimeIndex,dtype = 'datetime64[ns]'
+        The index of snapshot dataframe, instead of the 'machine_timestamp'.
+    log_r: pd.Series, np.array
+        The log return.
+    signals: pd.Series, np.array
+        The signal or forecaster.
+    rolling_window: int
+        Calculate n days once for ic and others.
+    nda: str,None or 'nda' ,optional
+        Split one day into 3 time zones.
+
+    Returns
+    -------
+    [DataFrame , int]
+        The dataframe contains ic, skew and mean of the log return when signal is in extreme condition.
+        The int variable is the weighted sum of all evaluators.
     
-    
-    return str(trading_days[i + rolling_window-1]), skew_num 
-
-
-
-def calc_rolling_skew(time,log_r,signals,rolling_window):
+    """
     if len(signals.shape)==2:
         columns = list(range(signals.shape[1]))
     else:
@@ -177,29 +208,111 @@ def calc_rolling_skew(time,log_r,signals,rolling_window):
         columns = signals.columns
     if hasattr(signals, 'values'):
         signals = signals.values
+        
     log_r = pd.Series(log_r, index=pd.to_datetime(time))
     signals = pd.DataFrame(signals, index=pd.to_datetime(time))
     trading_days = pd.unique(log_r.index.date)
     result_dic = {}
+    
     for i in list(range(len(trading_days) - rolling_window +1)):
-        k = _calc_skew(i, trading_days, rolling_window, log_r, signals)
+        k = _calc_score(i, trading_days, rolling_window, log_r, signals,nda)
         result_dic[k[0]] = k[1]
         
-    rolling_skew = pd.DataFrame(result_dic).T
-    rolling_skew.columns = ['taking +','taking -']
-    return rolling_skew 
+    rolling_score = pd.DataFrame(result_dic).T
+    if nda==None:
+        rolling_score.columns = ['mean +','mean -','skew +','skew -','ic +','ic -']
+    else:
+        col = []
+        for x in nda:
+            col.extend([x+'_mean +',x+'_mean -',x+'_skew +',x+'_skew -',x+'_ic +',x+'_ic -'])
+        rolling_score.columns = col
+
+    return rolling_score ,rolling_score.apply(_calc_result_score,axis=1)
+
+def _calc_result_score(df):
+    cols = df.index 
+    res = 0
+    for col in cols:
+        if col[-1] == '+':
+            if "mean" in col:
+                res+=df[col]*1e3
+            else:
+                res+=df[col]
+        else:
+            if "mean" in col:
+                res-=df[col]*1e3
+            else:
+                res-=df[col]    
+
+    return res 
+
+def _calc_score(i, trading_days, rolling_window, log_r, signal,nda = None):
+    result = []
+    logr_i = log_r.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])]
+    signals_i = signal.loc[str(trading_days[i]):str(trading_days[i + rolling_window-1])]
+    thres = get_oc_threshold('i1')
+    
+    if nda == None:
+        signals_i = signals_i.reset_index(drop=True).values.flatten()
+        logr_i    = logr_i.reset_index(drop=True).values.flatten()
+        m_logr_u = sgu.xy_finder(signals_i,logr_i,thres,reverse = False)
+        m_logr_d = sgu.xy_finder(signals_i,logr_i,-thres,reverse = False)
+        ic =[corr(signals_i[np.where(signals_i>thres)[0]],m_logr_u),\
+             corr(signals_i[np.where(signals_i<-thres)[0]],m_logr_d)]
+        
+        result.extend([np.mean(m_logr_u),np.mean(m_logr_d),stats.skew(m_logr_u),stats.skew(m_logr_d)])
+        result.extend(ic)
+    else:
+        # plt.plot(logr_i.index)
+        # sys.exit()
+        n_id = signals_i[(signals_i.index < pd.to_datetime(str(trading_days[i])+" 23:00")) | \
+            (signals_i.index > pd.to_datetime(str(trading_days[i])+" 21:00"))].index
+
+        d_id = signals_i[(signals_i.index < pd.to_datetime(str(trading_days[i])+" 12:00")) & \
+            (signals_i.index > pd.to_datetime(str(trading_days[i])+" 09:00"))].index
+        
+        a_id = signals_i[(signals_i.index < pd.to_datetime(str(trading_days[i])+" 15:00")) & \
+            (signals_i.index > pd.to_datetime(str(trading_days[i])+" 13:30"))].index
+
+        for x in nda:
+            id = eval(x+'_id')
+            m_logr_u = sgu.xy_finder(signals_i.loc[id,:].values.flatten(),\
+                logr_i[id].values.flatten(),thres)
+            m_logr_d = sgu.xy_finder(signals_i.loc[id,:].values.flatten(),logr_i[id].values.flatten(),-thres)
+            thres_per = stats.percentileofscore(signals_i,thres)
+            thres_per2 = stats.percentileofscore(signals_i,thres)
+            
+            # ic = [corr(x = signals_i.loc[id,:].to_numpy(), y = logr_i[id].to_numpy() ,x_percent = [thres_per,thres_per2])]
+            x = signals_i.loc[id,:].values.flatten()
+            x1 = x[np.where(x>thres)[0]]
+            x2 = x[np.where(x<-thres)[0]]
+            y1 = m_logr_u.flatten()
+            y2 = m_logr_d.flatten()
+            if (len(x)==0)|(len(x1)==0):
+                ic = [np.nan,np.nan]
+            else:
+                ic = [corr(x1,y1),corr(x2,y2)]
+            result.extend([np.mean(m_logr_u),np.mean(m_logr_d),stats.skew(m_logr_u),stats.skew(m_logr_d)])
+            result.extend(ic)
+            
+    return str(trading_days[i + rolling_window-1]), result 
+
+
+
+
 
 
 def signal_confusion_matrix(time,x,y,thres,horizon = 1):
     """
     Parameters
     ----------
-        time
+        time: df['machine_timestamp']
         x: signal
         y: log return 
         thres: [making_thres,taking_thres]
     """
     t = [-np.inf, -thres[1],thres[0],0,thres[0],thres[1],np.inf]
+    t = [-np.inf, -thres[1],0,thres[1],np.inf]
     data = pd.concat([pd.Series(x),pd.Series(y)],axis=1).dropna(how = 'any',axis=0)
     reg = linear_model.LinearRegression()
     reg.fit(data.iloc[:,0].values.reshape(-1,1),data.iloc[:,1].values.reshape(-1,1))
@@ -242,24 +355,17 @@ def cts_confusion_matrix(x,y,a,thres,_clf_func):
     yc = np.frompyfunc(_clf_func_thres,1,1)(y)
     xc = pd.Series(xc,dtype = 'int64')
     yc = pd.Series(yc,dtype = 'int64')
-    # xc = pd.DataFrame(xc)
-    # yc = pd.DataFrame(yc)
     result = confusion_matrix(yc,xc)
     score = f1_score(yc,xc,average = 'micro')
     return result,score 
 
 
 def _clf_func(x,thres):
-    thres *=100
+    thres *=1
     assert len(thres)>1,'wrong thres'
     if x<-thres[1]:
         return 0 
-    elif x<-thres[0] and x > -thres[1]:
-        return 1
-    elif x<thres[0] and x > -thres[0]:
+    elif x<thres[1]:
+        return 1 
+    else:
         return 2
-    elif x<thres[1] and x > thres[0]:
-        return 3
-    elif x> thres[1]:
-        return 4 
-    

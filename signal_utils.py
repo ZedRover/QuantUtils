@@ -1,3 +1,8 @@
+'''
+Author: Samuel Wang
+Date: 2021-10-21 15:57:23
+Description: 
+'''
 import pandas as pd 
 import numpy as np 
 import matplotlib.pyplot as plt
@@ -7,6 +12,17 @@ from qrutils.future_utils import get_X_and_snapshot_baptized
 pd.set_option('display.max_columns',None)
 from qrutils import log_return ,corr,calc_rolling_corr 
 from numba import jit
+import warnings
+def zero_divide(x,y):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        res = np.divide(x,y)
+    if hasattr(y,"__len__"):
+        res[y ==0]=0
+    elif y==0:
+        res = 0 
+    return res 
+    
 
 
 
@@ -34,25 +50,27 @@ def xy_finder(x,y,thres,reverse = False):
         if type(thres)!= list:
             if thres>0:
                 idx = np.where(x>thres)[0]
-                return y[idx]
+
             else:
                 idx = np.where(x<thres)[0]
+
                 return y[idx]
 
         elif len(thres)==2:
             idx = list(set(np.where(thres[0]<x)) & set(np.where(x<thres[1])))
-            return y[idx]   
+
+        return y[idx]   
     else:
         if type(thres)!= list:
             if thres>0:
                 idx = np.where(y>thres)[0]
                 return x[idx]
             else:
-                idx = np.where(y<thres)[0]
+                idx = np.where(y>thres)[0]
                 return x[idx]
-
         elif len(thres)==2:
             idx = list(set(np.where(thres[0]<y)) & set(np.where(y<thres[1])))
+
             return x[idx]   
 
-        
+    
