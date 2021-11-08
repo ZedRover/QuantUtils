@@ -106,7 +106,25 @@ def get_sig_info(df_all,horizon = 2,rolling = 1):
     plt.show()
     
     return x,y,rolling_ic
-    
+
+def exchange_generator(prod):
+    prod = ''.join([i for i in prod if not i.isdigit()])
+    if prod.upper() in ['I', "J", "JM", 'A', 'B', 'M', 'C', 'CS', 'V', 'EB', 'EG',
+                        'PG', 'RR', 'L', 'BB', 'FB', 'PP', 'P', 'Y', 'M', 'LH', 'JD']:
+        exchange = "dce"
+    elif prod.upper() in ['CU', 'PB', 'AL', 'ZN', 'SN', 'NI', 'SS', "RB",
+                          'HC', 'AG', 'AU', 'BU', 'FU', 'SP', 'SC', 'RU', 'WR','BC', 'NR', 
+                          'LU']:
+        exchange = "shfe"
+    elif prod.upper() in ['IF', 'IC', 'IH', 'T', 'TF', 'TS']:                               
+        exchange = "cffex"
+    elif prod.upper() in ['TA', 'AP', 'CJ', 'MA', 'CJ', 'FG', 'SA', 'OI', 'ZC','CY', 'PF',
+                          'CF', 'SM', 'PK', 'SR', 'RM', 'SF', 'UR']:
+        exchange = "czce"                                                       
+    else:
+        raise ValueError('No exchange for product {}'.format(prod))
+    return exchange
+
 def plot_y_for_x(x,y,thres,direction = 'x-y'):
     """
     Parameters
