@@ -1,5 +1,5 @@
 from pandas.core.window import rolling
-from qrutils import log_return, corr, calc_rolling_corr
+from rs_utils.qrutils import log_return, corr, calc_rolling_corr
 import pandas as pd
 import numpy as np
 from scipy import stats 
